@@ -1,22 +1,10 @@
-## DEPRECATION NOTICE: Do not add new tests to this file!
-##
-## View and controller tests are deprecated in the Growstuff project.
-## We no longer write new view and controller tests, but instead write
-## feature tests (in spec/features) using Capybara (https://github.com/jnicklas/capybara).
-## These test the full stack, behaving as a browser, and require less complicated setup
-## to run. Please feel free to delete old view/controller tests as they are reimplemented
-## in feature tests.
-##
-## If you submit a pull request containing new view or controller tests, it will not be
-## merged.
-
 require 'rails_helper'
 
 describe "plantings/edit" do
-  before(:each) do
+  before do
     @member = FactoryBot.create(:member,
       login_name: 'right',
-      email: 'right@example.com')
+      email:      'right@example.com')
 
     # creating two crops to make sure that the correct one is selected
     # in the form.
@@ -26,13 +14,14 @@ describe "plantings/edit" do
     # and likewise for gardens
     @garden =  FactoryBot.create(:garden_z, owner: @member)
     @garden2 = FactoryBot.create(:garden_a, owner: @member)
+    @gardens = @member.gardens
 
     @planting = assign(:planting,
-      FactoryBot.create(:planting, garden: @garden, crop: @tomato))
+      FactoryBot.create(:planting, garden: @garden, crop: @tomato, owner: @member))
   end
 
   context "logged in" do
-    before(:each) do
+    before do
       sign_in @member
       controller.stub(:current_user) { @member }
       render
@@ -47,17 +36,12 @@ describe "plantings/edit" do
       end
     end
 
-    it 'includes helpful links for crops and gardens' do
-      assert_select "a[href='#{new_garden_path}']", text: "Add a garden."
-    end
-
     it "chooses the right crop" do
       assert_select "input#crop[value=?]", "tomato"
     end
 
     it "chooses the right garden" do
-      assert_select "select#planting_garden_id",
-        html: /option selected value="#{@garden.id}"/
+      assert_select "input", id: "planting_garden_id_#{@garden.id}", checked: "checked"
     end
   end
 end

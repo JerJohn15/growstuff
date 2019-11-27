@@ -1,23 +1,12 @@
 require 'rails_helper'
 
 describe Post do
-  let(:member) { FactoryBot.create(:member) }
+  let(:member) { FactoryBot.create(:member, login_name: 'whinacooper') }
+
   it_behaves_like "it is likeable"
 
-  it "should be sorted in reverse order" do
-    FactoryBot.create(:post,
-      subject: 'first entry',
-      author: member,
-      created_at: 2.days.ago)
-    FactoryBot.create(:post,
-      subject: 'second entry',
-      author: member,
-      created_at: 1.day.ago)
-    Post.first.subject.should == "second entry"
-  end
-
-  it "should have a slug" do
-    post = FactoryBot.create(:post, author: member)
+  it "has a slug" do
+    post = FactoryBot.create(:post, author: member, subject: 'A Post')
     time = post.created_at
     datestr = time.strftime("%Y%m%d")
     # 2 digit day and month, full-length years
@@ -72,7 +61,7 @@ describe Post do
 
   context "recent activity" do
     before do
-      Time.stub(now: Time.now)
+      Time.stub(now: Time.zone.now)
     end
 
     let!(:post) { FactoryBot.create(:post, created_at: 1.day.ago) }
@@ -82,7 +71,7 @@ describe Post do
     end
 
     it "sets recent activity to comment time" do
-      comment = FactoryBot.create(:comment, post: post,
+      comment = FactoryBot.create(:comment, post:       post,
                                             created_at: 1.hour.ago)
       post.recent_activity.to_i.should eq comment.created_at.to_i
     end
@@ -107,15 +96,15 @@ describe Post do
     let(:member2) { FactoryBot.create(:member) }
 
     it "sends a notification when a member is mentioned using @-syntax" do
-      expect {
+      expect do
         FactoryBot.create(:post, author: member, body: "Hey @#{member2}")
-      }.to change(Notification, :count).by(1)
+      end.to change(Notification, :count).by(1)
     end
 
     it "sends a notification when a member is mentioned using [](member) syntax" do
-      expect {
+      expect do
         FactoryBot.create(:post, author: member, body: "Hey [#{member2}](member)")
-      }.to change(Notification, :count).by(1)
+      end.to change(Notification, :count).by(1)
     end
 
     it "sets the notification field" do
@@ -129,35 +118,35 @@ describe Post do
 
     it "sends notifications to all members mentioned" do
       member3 = FactoryBot.create(:member)
-      expect {
+      expect do
         FactoryBot.create(:post, author: member, body: "Hey @#{member2} & @#{member3}")
-      }.to change(Notification, :count).by(2)
+      end.to change(Notification, :count).by(2)
     end
 
     it "doesn't send notifications if you mention yourself" do
-      expect {
+      expect do
         FactoryBot.create(:post, author: member, body: "@#{member}")
-      }.to change(Notification, :count).by(0)
+      end.to change(Notification, :count).by(0)
     end
   end
 
   context "crop-post association" do
     let!(:tomato) { FactoryBot.create(:tomato) }
-    let!(:maize) { FactoryBot.create(:maize) }
-    let!(:chard) { FactoryBot.create(:chard) }
-    let!(:post) { FactoryBot.create(:post, body: "[maize](crop)[tomato](crop)[tomato](crop)") }
+    let!(:maize) { FactoryBot.create(:maize)                                                   }
+    let!(:chard) { FactoryBot.create(:chard)                                                   }
+    let!(:post)  { FactoryBot.create(:post, body: "[maize](crop)[tomato](crop)[tomato](crop)") }
 
-    it "should be generated" do
+    it "is generated" do
       expect(tomato.posts).to eq [post]
       expect(maize.posts).to eq [post]
     end
 
-    it "should not duplicate" do
+    it "does not duplicate" do
       expect(post.crops) =~ [tomato, maize]
     end
 
-    it "should be updated when post was modified" do
-      post.update_attributes(body: "[chard](crop)")
+    it "is updated when post was modified" do
+      post.update(body: "[chard](crop)")
 
       expect(post.crops).to eq [chard]
       expect(chard.posts).to eq [post]
@@ -170,14 +159,14 @@ describe Post do
         post.destroy
       end
 
-      it "should delete the association" do
+      it "deletes the association" do
         expect(Crop.find(tomato.id).posts).to eq []
         expect(Crop.find(maize.id).posts).to eq []
       end
 
-      it "should not delete the crops" do
-        expect(Crop.find(tomato.id)).to_not eq nil
-        expect(Crop.find(maize.id)).to_not eq nil
+      it "does not delete the crops" do
+        expect(Crop.find(tomato.id)).not_to eq nil
+        expect(Crop.find(maize.id)).not_to eq nil
       end
     end
   end

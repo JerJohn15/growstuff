@@ -1,15 +1,16 @@
 require 'rails_helper'
 
 describe Seed do
-  let(:seed) { FactoryBot.build(:seed) }
+  let(:owner) { FactoryBot.create :owner, login_name: 'tamateapokaiwhenua' }
+  let(:seed)  { FactoryBot.build(:seed, owner: owner)                      }
 
-  it 'should save a basic seed' do
+  it 'saves a basic seed' do
     seed.save.should be(true)
   end
 
-  it "should have a slug" do
+  it "has a slug" do
     seed.save
-    seed.slug.should match(/member\d+-magic-bean/)
+    seed.slug.should match(/tamateapokaiwhenua-magic-bean/)
   end
 
   context 'quantity' do
@@ -44,7 +45,7 @@ describe Seed do
       end
     end
 
-    it 'should refuse invalid tradable_to values' do
+    it 'refuses invalid tradable_to values' do
       @seed = FactoryBot.build(:seed, tradable_to: 'not valid')
       @seed.should_not be_valid
       @seed.errors[:tradable_to].should include(
@@ -53,7 +54,7 @@ describe Seed do
       )
     end
 
-    it 'should not allow nil or blank values' do
+    it 'does not allow nil or blank values' do
       @seed = FactoryBot.build(:seed, tradable_to: nil)
       @seed.should_not be_valid
       @seed = FactoryBot.build(:seed, tradable_to: '')
@@ -111,16 +112,16 @@ describe Seed do
       end
     end
 
-    it 'should refuse invalid organic/GMO/heirloom values' do
-      [:organic, :gmo, :heirloom].each do |field|
+    it 'refuses invalid organic/GMO/heirloom values' do
+      %i(organic gmo heirloom).each do |field|
         @seed = FactoryBot.build(:seed, field => 'not valid')
         @seed.should_not be_valid
         @seed.errors[field].should_not be_empty
       end
     end
 
-    it 'should not allow nil or blank values' do
-      [:organic, :gmo, :heirloom].each do |field|
+    it 'does not allow nil or blank values' do
+      %i(organic gmo heirloom).each do |field|
         @seed = FactoryBot.build(:seed, field => nil)
         @seed.should_not be_valid
         @seed = FactoryBot.build(:seed, field => '')
@@ -151,9 +152,47 @@ describe Seed do
 
   context 'photos' do
     let(:seed) { FactoryBot.create :seed }
-    before { seed.photos << FactoryBot.create(:photo) }
+
+    before { seed.photos << FactoryBot.create(:photo, owner: seed.owner) }
+
     it 'is found in has_photos scope' do
       Seed.has_photos.should include(seed)
+    end
+  end
+
+  context 'ancestry' do
+    let(:parent_planting) { FactoryBot.create :planting                                                             }
+    let(:seed)            { FactoryBot.create :seed, parent_planting: parent_planting, owner: parent_planting.owner }
+
+    it "seed has a parent planting" do
+      expect(seed.parent_planting).to eq(parent_planting)
+    end
+    it "planting has a child seed" do
+      expect(parent_planting.child_seeds).to eq [seed]
+    end
+  end
+
+  context "finished" do
+    describe 'has finished fields' do
+      let(:seed) { FactoryBot.create(:finished_seed) }
+
+      it { expect(seed.finished).to eq true }
+      it { expect(seed.finished_at).to be_an_instance_of Date }
+    end
+
+    describe 'scopes' do
+      let!(:seed)          { FactoryBot.create(:seed)          }
+      let!(:finished_seed) { FactoryBot.create(:finished_seed) }
+
+      describe 'has finished scope' do
+        it { expect(Seed.finished).to include finished_seed }
+        it { expect(Seed.finished).not_to include seed }
+      end
+
+      describe 'has current scope' do
+        it { expect(Seed.current).to include seed }
+        it { expect(Seed.current).not_to include finished_seed }
+      end
     end
   end
 end

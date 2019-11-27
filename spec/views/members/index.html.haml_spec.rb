@@ -2,7 +2,8 @@ require 'rails_helper'
 
 describe "members/index" do
   let(:member) { FactoryBot.create(:london_member) }
-  before(:each) do
+
+  before do
     controller.stub(:current_user) { nil }
     page = 1
     per_page = 2
@@ -15,7 +16,7 @@ describe "members/index" do
   end
 
   it "contains two gravatar icons" do
-    assert_select "img", src: /gravatar\.com\/avatar/, count: 2
+    assert_select "img", src: %r{gravatar\.com/avatar}, count: 2
   end
 
   it 'contains member locations' do
