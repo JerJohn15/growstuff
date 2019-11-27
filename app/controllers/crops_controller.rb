@@ -1,10 +1,10 @@
 require 'will_paginate/array'
 
 class CropsController < ApplicationController
-  before_action :authenticate_member!, except: [:index, :hierarchy, :search, :show]
+  before_action :authenticate_member!, except: %i(index hierarchy search show)
   load_and_authorize_resource
-  skip_authorize_resource only: [:hierarchy, :search]
-  respond_to :html, :json, :rss, :csv
+  skip_authorize_resource only: %i(hierarchy search)
+  respond_to :html, :json, :rss, :csv, :svg
   responders :flash
 
   def index
@@ -35,26 +35,44 @@ class CropsController < ApplicationController
     respond_with @crops
   end
 
+  def openfarm
+    @crop = Crop.find(params[:crop_slug])
+    @crop.update_openfarm_data!
+    respond_with @crop, location: @crop
+  end
+
   def hierarchy
-    @crops = Crop.toplevel
+    @crops = Crop.toplevel.order(:name)
     respond_with @crops
   end
 
   def search
     @term = params[:term]
-    @matches = Crop.search(@term)
-    @paginated_matches = @matches.paginate(page: params[:page])
 
-    respond_with @matches
+    @crops = CropSearchService.search(
+      @term, page:           params[:page],
+             per_page:       36,
+             current_member: current_member
+    )
+    respond_with @crops
   end
 
   def show
-    @crop = Crop.includes(:scientific_names, plantings: :photos).find(params[:id])
-    @posts = @crop.posts.paginate(page: params[:page])
-
     respond_to do |format|
-      format.html # show.html.haml
-      format.json { render json: @crop.to_json(crop_json_fields) }
+      format.html do
+        @crop = Crop.includes(:scientific_names, plantings: :photos).find_by!(slug: params[:slug])
+        @photos = Photo.by_crop(@crop)
+        @posts = @crop.posts.order(created_at: :desc).paginate(page: params[:page])
+      end
+      format.svg do
+        @crop = Crop.find_by!(slug: params[:slug])
+        icon_data = @crop.svg_icon.presence || File.read(Rails.root.join('app', 'assets', 'images', 'icons', 'sprout.svg'))
+        send_data(icon_data, type: "image/svg+xml", disposition: "inline")
+      end
+      format.json do
+        @crop = Crop.find_by!(slug: params[:slug])
+        render json: @crop.to_json(crop_json_fields)
+      end
     end
   end
 
@@ -67,6 +85,7 @@ class CropsController < ApplicationController
   end
 
   def edit
+    @crop = Crop.find_by!(slug: params[:slug])
     @crop.alternate_names.build if @crop.alternate_names.blank?
     @crop.scientific_names.build if @crop.scientific_names.blank?
   end
@@ -87,21 +106,32 @@ class CropsController < ApplicationController
   end
 
   def update
-    previous_status = @crop.approval_status
+    @crop = Crop.find_by!(slug: params[:slug])
 
-    @crop.creator = current_member if previous_status == "pending"
+    if can?(:wrangle, @crop)
+      @crop.approval_status = 'rejected' if params.fetch("reject", false)
+      @crop.approval_status = 'approved' if params.fetch("approve", false)
+    end
 
+    @crop.creator = current_member if @crop.approval_status == "pending"
     if @crop.update(crop_params)
       recreate_names('alt_name', 'alternate')
       recreate_names('sci_name', 'scientific')
 
-      notifier.deliver_now! if previous_status == "pending"
+      if @crop.approval_status_changed?(from: "pending", to: "approved")
+        notifier.deliver_now!
+        @crop.update_openfarm_data!
+      end
+    else
+      @crop.approval_status = @crop.approval_status_was
     end
 
     respond_with @crop
   end
 
   def destroy
+    @crop = Crop.find_by!(slug: params[:slug])
+    authorize! :destroy, @crop
     @crop.destroy
     respond_with @crop
   end
@@ -128,13 +158,15 @@ class CropsController < ApplicationController
 
   def notify_wranglers
     return if current_member.role? :crop_wrangler
-    Role.crop_wranglers.each do |w|
+
+    Role.crop_wranglers&.each do |w|
       Notifier.new_crop_request(w, @crop).deliver_now!
     end
   end
 
   def recreate_names(param_name, name_type)
-    return unless params[param_name].present?
+    return if params[param_name].blank?
+
     destroy_names(name_type)
     params[param_name].each do |_i, value|
       create_name!(name_type, value) unless value.empty?
@@ -150,18 +182,18 @@ class CropsController < ApplicationController
   end
 
   def crop_params
-    params.require(:crop).permit(:en_wikipedia_url,
+    params.require(:crop).permit(
+      :en_wikipedia_url,
       :name,
       :parent_id,
-      :creator_id,
       :perennial,
-      :approval_status,
       :request_notes,
       :reason_for_rejection,
       :rejection_notes,
-      scientific_names_attributes: [:scientific_name,
-                                    :_destroy,
-                                    :id])
+      scientific_names_attributes: %i(scientific_name
+                                      _destroy
+                                      id)
+    )
   end
 
   def filename
@@ -171,13 +203,13 @@ class CropsController < ApplicationController
   def crop_json_fields
     {
       include: {
-        plantings: {
+        plantings:        {
           include: {
-            owner: { only: [:id, :login_name, :location, :latitude, :longitude] }
+            owner: { only: %i(id login_name location latitude longitude) }
           }
         },
         scientific_names: { only: [:name] },
-        alternate_names: { only: [:name] }
+        alternate_names:  { only: [:name] }
       }
     }
   end
@@ -185,7 +217,8 @@ class CropsController < ApplicationController
   def crops
     q = Crop.approved.includes(:scientific_names, plantings: :photos)
     q = q.popular unless @sort == 'alpha'
-    q.includes(:photos).paginate(page: params[:page])
+    q.order(Arel.sql("LOWER(crops.name)"))
+      .includes(:photos).paginate(page: params[:page])
   end
 
   def requested_crops

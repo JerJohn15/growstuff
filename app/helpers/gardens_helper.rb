@@ -9,10 +9,6 @@ module GardensHelper
     end
   end
 
-  def gardens_active_tickbox_path(owner, show_all)
-    show_inactive_tickbox_path('gardens', owner, show_all)
-  end
-
   def display_garden_name(garden)
     truncate(garden.name, length: 50, separator: ' ', omission: '... ')
   end
@@ -21,6 +17,7 @@ module GardensHelper
     if plantings.blank?
       "None"
     else
+      # rubocop:disable Rails/OutputSafety
       output = '<ul class="plantings">'
       plantings.each do |planting|
         output += "<li>"
@@ -30,6 +27,7 @@ module GardensHelper
       end
       output += '</ul>'
       output.html_safe
+      # rubocop:enable Rails/OutputSafety
     end
   end
 end

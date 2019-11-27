@@ -1,24 +1,12 @@
-## DEPRECATION NOTICE: Do not add new tests to this file!
-##
-## View and controller tests are deprecated in the Growstuff project.
-## We no longer write new view and controller tests, but instead write
-## feature tests (in spec/features) using Capybara (https://github.com/jnicklas/capybara).
-## These test the full stack, behaving as a browser, and require less complicated setup
-## to run. Please feel free to delete old view/controller tests as they are reimplemented
-## in feature tests.
-##
-## If you submit a pull request containing new view or controller tests, it will not be
-## merged.
-
 require 'rails_helper'
 
 describe 'seeds/index.rss.haml' do
-  before(:each) do
+  before do
     controller.stub(:current_user) { nil }
   end
 
   context 'all seeds' do
-    before(:each) do
+    before do
       @seed = FactoryBot.create(:seed)
       @tradable = FactoryBot.create(:tradable_seed)
       assign(:seeds, [@seed, @tradable])
@@ -47,7 +35,7 @@ describe 'seeds/index.rss.haml' do
   end
 
   context "one member's seeds" do
-    before(:each) do
+    before do
       @seed = FactoryBot.create(:seed)
       assign(:seeds, [@seed])
       assign(:owner, @seed.owner)

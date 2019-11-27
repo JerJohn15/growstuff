@@ -3,21 +3,27 @@ class HarvestsController < ApplicationController
   after_action :update_crop_medians, only: %i(create update destroy)
   load_and_authorize_resource
   respond_to :html, :json
-  respond_to :csv, only: :index
+  respond_to :csv, :rss, only: :index
   responders :flash
 
   def index
-    @owner = Member.find_by(slug: params[:owner]) if params[:owner]
-    @crop = Crop.find_by(slug: params[:crop]) if params[:crop]
-    @planting = Planting.find_by(slug: params[:planting_id]) if params[:planting_id]
+    @owner = Member.find_by(slug: params[:member_slug])
+    @crop = Crop.find_by(slug: params[:crop_slug])
+    @planting = Planting.find_by(slug: params[:planting_id])
 
-    @harvests = harvests
+    @harvests = @harvests.where(owner: @owner) if @owner.present?
+    @harvests = @harvests.where(crop: @crop) if @crop.present?
+    @harvests = @harvests.where(planting: @planting) if @planting.present?
+    @harvests = @harvests.order(harvested_at: :desc).joins(:owner, :crop).paginate(page: params[:page])
+
     @filename = csv_filename
+
     respond_with(@harvests)
   end
 
   def show
     @matching_plantings = matching_plantings if @harvest.owner == current_member
+    @photos = @harvest.photos.order(created_at: :desc).paginate(page: params[:page])
     respond_with(@harvest)
   end
 
@@ -30,13 +36,18 @@ class HarvestsController < ApplicationController
 
   def edit
     @planting = @harvest.planting if @harvest.planting_id
+    respond_with(@harvest)
   end
 
   def create
     @harvest.crop_id = @harvest.planting.crop_id if @harvest.planting_id
     @harvest.harvested_at = Time.zone.now if @harvest.harvested_at.blank?
     @harvest.save
-    respond_with(@harvest)
+    if params[:return] == 'planting'
+      respond_with(@harvest, location: @harvest.planting)
+    else
+      respond_with(@harvest)
+    end
   end
 
   def update
@@ -65,23 +76,11 @@ class HarvestsController < ApplicationController
       .where('(finished_at IS NULL OR finished_at >= ?)', @harvest.harvested_at)
   end
 
-  def harvests
-    if @owner
-      @owner.harvests
-    elsif @crop
-      @crop.harvests
-    elsif @planting
-      @planting.harvests
-    else
-      Harvest.all
-    end.order(harvested_at: :desc).joins(:owner, :crop).paginate(page: params[:page])
-  end
-
   def csv_filename
     specifics = if @owner
-                  "#{@owner.login_name}-"
+                  "#{@owner.to_param}-"
                 elsif @crop
-                  "#{@crop.name}-"
+                  "#{@crop.to_param}-"
                 end
     "Growstuff-#{specifics}Harvests-#{Time.zone.now.to_s(:number)}.csv"
   end
@@ -91,7 +90,7 @@ class HarvestsController < ApplicationController
     # if this harvest is not linked to a planting, then do nothing
     return if @harvest.planting.nil?
 
-    @harvest.planting.update_harvest_days
+    @harvest.planting.update_harvest_days!
     @harvest.crop.update_harvest_medians
   end
 end

@@ -1,4 +1,5 @@
 module AutoSuggestHelper
+  # rubocop:disable Rails/OutputSafety
   def auto_suggest(resource, source, options = {})
     if options[:default] && !options[:default].new_record?
       default = options[:default]
@@ -9,9 +10,8 @@ module AutoSuggestHelper
     end
 
     resource = resource.class.name.downcase
-    source_path = Rails.application.routes.url_helpers.send("#{source}s_search_path")
-
-    %Q{
+    source_path = Rails.application.routes.url_helpers.send("search_#{source}s_path", format: :json)
+    %(
       <input id="#{source}" class="auto-suggest #{options[:class]}"
         type="text" value="#{default}" data-source-url="#{source_path}",
         placeholder="e.g. lettuce">
@@ -20,6 +20,7 @@ module AutoSuggestHelper
       </noscript>
       <input id="#{resource}_#{source}_id" class="auto-suggest-id"
         type="hidden" name="#{resource}[#{source}_id]" value="#{default_id}">
-    }.html_safe
+    ).html_safe
   end
+  # rubocop:enable Rails/OutputSafety
 end

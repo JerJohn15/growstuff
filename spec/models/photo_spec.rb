@@ -1,18 +1,41 @@
 require 'rails_helper'
 
 describe Photo do
-  let(:photo) { FactoryBot.create(:photo, owner: member) }
+  let(:photo)  { FactoryBot.create(:photo, owner: member) }
+  let(:old_photo) { FactoryBot.create(:photo, owner: member, created_at: 1.year.ago, date_taken: 2.years.ago) }
   let(:member) { FactoryBot.create(:member) }
+
+  it_behaves_like "it is likeable"
+
   describe 'add/delete functionality' do
-    let(:planting) { FactoryBot.create(:planting) }
-    let(:harvest) { FactoryBot.create(:harvest) }
-    let(:garden) { FactoryBot.create(:garden) }
+    let(:planting) { FactoryBot.create(:planting, owner: member) }
+    let(:seed) { FactoryBot.create(:seed, owner: member) }
+    let(:harvest) { FactoryBot.create(:harvest, owner: member) }
+    let(:post) { FactoryBot.create(:post, author: member) }
+    let(:garden)  { FactoryBot.create(:garden, owner: member) }
 
     context "adds photos" do
-      it 'to a planting' do
-        planting.photos << photo
-        expect(planting.photos.size).to eq 1
-        expect(planting.photos.first).to eq photo
+      describe 'to a planting' do
+        before { planting.photos << photo }
+
+        it { expect(planting.photos.size).to eq 1 }
+        it { expect(planting.photos.first).to eq photo }
+        # there's only one photo, so that's the default
+        it { expect(planting.default_photo).to eq photo }
+        it { expect(planting.crop.default_photo).to eq photo }
+
+        describe 'with a second older photo' do
+          # Add an old photo
+          before { planting.photos << old_photo }
+          it { expect(planting.default_photo).to eq photo }
+          it { expect(planting.crop.default_photo).to eq photo }
+
+          describe 'and someone likes the old photo' do
+            before { FactoryBot.create :like, likeable: old_photo }
+            it { expect(planting.default_photo).to eq old_photo }
+            it { expect(planting.crop.default_photo).to eq old_photo }
+          end
+        end
       end
 
       it 'to a harvest' do
@@ -21,10 +44,22 @@ describe Photo do
         expect(harvest.photos.first).to eq photo
       end
 
+      it 'to a seed' do
+        seed.photos << photo
+        expect(seed.photos.size).to eq 1
+        expect(seed.photos.first).to eq photo
+      end
+
       it 'to a garden' do
         garden.photos << photo
         expect(garden.photos.size).to eq 1
         expect(garden.photos.first).to eq photo
+      end
+
+      it 'to a post' do
+        post.photos << photo
+        expect(post.photos.size).to eq 1
+        expect(post.photos.first).to eq photo
       end
     end
 
@@ -49,7 +84,7 @@ describe Photo do
 
       it "automatically if unused" do
         photo.destroy_if_unused
-        expect(lambda { photo.reload }).to raise_error ActiveRecord::RecordNotFound
+        expect(-> { photo.reload }).to raise_error ActiveRecord::RecordNotFound
       end
 
       it 'they are used by plantings but not harvests' do
@@ -57,7 +92,7 @@ describe Photo do
         planting.photos << photo
         harvest.destroy # photo is now used by harvest but not planting
         photo.destroy_if_unused
-        expect(lambda { photo.reload }).not_to raise_error
+        expect(-> { photo.reload }).not_to raise_error
       end
 
       it 'they are used by harvests but not plantings' do
@@ -65,7 +100,7 @@ describe Photo do
         planting.photos << photo
         planting.destroy # photo is now used by harvest but not planting
         photo.destroy_if_unused
-        expect(lambda { photo.reload }).not_to raise_error
+        expect(-> { photo.reload }).not_to raise_error
       end
 
       it 'they are used by gardens but not plantings' do
@@ -73,7 +108,7 @@ describe Photo do
         planting.photos << photo
         planting.destroy # photo is now used by garden but not planting
         photo.destroy_if_unused
-        expect(lambda { photo.reload }).not_to raise_error
+        expect(-> { photo.reload }).not_to raise_error
       end
 
       it 'they are no longer used by anything' do
@@ -98,7 +133,7 @@ describe Photo do
         expect(photo.harvests.size).to eq 0
         expect(photo.gardens.size).to eq 0
         photo.destroy_if_unused
-        expect(lambda { photo.reload }).to raise_error ActiveRecord::RecordNotFound
+        expect(-> { photo.reload }).to raise_error ActiveRecord::RecordNotFound
       end
 
       it 'does not occur when a photo is still in use' do
@@ -124,5 +159,33 @@ describe Photo do
     expect(Photo.joins(:owner).all).to include(photo)
     member.destroy
     expect(Photo.joins(:owner).all).not_to include(photo)
+  end
+
+  describe 'scopes' do
+    let(:harvest_crop) { FactoryBot.create :crop }
+    let!(:harvest)       { FactoryBot.create :harvest, owner: member, crop: harvest_crop }
+    let!(:harvest_photo) { FactoryBot.create :photo, owner: member                       }
+
+    let(:planting_crop) { FactoryBot.create :crop }
+    let!(:planting)       { FactoryBot.create :planting, owner: member, crop: planting_crop }
+    let!(:planting_photo) { FactoryBot.create :photo, owner: member                         }
+
+    let(:seed_crop) { FactoryBot.create :crop }
+    let!(:seed)       { FactoryBot.create :seed, owner: member, crop: seed_crop }
+    let!(:seed_photo) { FactoryBot.create :photo, owner: member                 }
+
+    before do
+      harvest.photos << harvest_photo
+      planting.photos << planting_photo
+      seed.photos << seed_photo
+    end
+
+    it { expect(Photo.by_model(Harvest)).to eq([harvest_photo]) }
+    it { expect(Photo.by_model(Planting)).to eq([planting_photo]) }
+    it { expect(Photo.by_model(Seed)).to eq([seed_photo]) }
+
+    it { expect(Photo.by_crop(harvest_crop)).to eq([harvest_photo]) }
+    it { expect(Photo.by_crop(planting_crop)).to eq([planting_photo]) }
+    it { expect(Photo.by_crop(seed_crop)).to eq([seed_photo]) }
   end
 end

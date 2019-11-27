@@ -1,45 +1,41 @@
 inherit_from: .rubocop_todo.yml
+require: rubocop-rails
 AllCops:
-  Include:
-    - 'Rakefile'
-    - 'config.ru'
-    - 'lib/**/*.rake'
   Exclude:
     - 'db/schema.rb'
     - 'vendor/**/*'
+  TargetRailsVersion: 5.0
 
 Rails:
   Enabled: true
 
-Style/FileName:
+Naming/FileName:
   Exclude:
+    - 'Guardfile'
     - 'Gemfile'
     - 'Gemfile.lock'
 
 Style/StringLiterals:
   Enabled: false
 
-# Stop hound and codeclimate fighting
 Style/PercentLiteralDelimiters:
   PreferredDelimiters:
     default: ()
     '%i': ()
     '%w': ()
 
-Style/MultilineMethodCallIndentation:
+Layout/MultilineMethodCallIndentation:
   EnforcedStyle: indented
+
+Layout/AlignHash:
+  EnforcedColonStyle: table
+  EnforcedHashRocketStyle: table
 
 # Configuration parameters: EnforcedStyle, SupportedStyles, IndentationWidth.
 # SupportedStyles: with_first_parameter, with_fixed_indentation
-Style/AlignParameters:
+Layout/AlignParameters:
   EnforcedStyle: with_fixed_indentation
 
-Metrics/LineLength:
-  Max: 120
-
-# turn these back on in Rails 5
-Rails/HttpPositionalArguments: # See https://github.com/bbatsov/rubocop/issues/3629
-  Enabled: false
 
 Style/Documentation:
   Enabled: false
@@ -60,14 +56,24 @@ Metrics/BlockLength:
     - '**/*.rake'
     - 'config/**/*.rb'
 
+Metrics/LineLength:
+  Max: 140
+
 # Remove the following once the code style matches
 Metrics/MethodLength:
   Max: 34
 Metrics/AbcSize:
-  Max: 31
+  Max: 33
+# Configuration parameters: CountComments.
 Metrics/ClassLength:
-  Max: 179
+  Max: 171
 Metrics/CyclomaticComplexity:
-  Max: 11
+  Max: 8
 Metrics/PerceivedComplexity:
   Max: 9
+
+# Places we use update_all, etc even though it skips validations.
+Rails/SkipsModelValidations:
+  Exclude:
+    - 'db/migrate/20190317023129_finished_boolean.rb'
+    - 'db/seeds.rb'
